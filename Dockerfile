@@ -23,6 +23,7 @@ ENV HOME=/home/user \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
+RUN chown user:user /app
 
 # --- Python dependencies (cached separately from app code) ----------------
 COPY --chown=user requirements.txt .
@@ -31,6 +32,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # --- Application code -----------------------------------------------------
 COPY --chown=user . .
+RUN chown -R user:user /app
 
 USER user
 
