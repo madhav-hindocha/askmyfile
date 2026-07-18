@@ -14,6 +14,16 @@ disk -- one user can never see another's data.
 """
 
 import os
+import socket
+
+# Force IPv4 DNS resolution to avoid EAI_NODATA / [Errno -5] errors on some hosts (like Render)
+_orig_getaddrinfo = socket.getaddrinfo
+def _patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    if family == 0 or family == socket.AF_UNSPEC:
+        family = socket.AF_INET
+    return _orig_getaddrinfo(host, port, family, type, proto, flags)
+socket.getaddrinfo = _patched_getaddrinfo
+
 import re
 import time
 from datetime import timedelta
