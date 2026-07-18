@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log In - AskMyFile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
+</head>
+<body class="auth-body">
+
+  <div class="auth-top">
+    <a class="brand" href="{{ url_for('landing') }}">
+      <div class="brand-mark">AF</div>
+      <div class="brand-text"><span class="brand-title">AskMyFile</span></div>
+    </a>
+    <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+  </div>
+
+  <div class="auth-shell">
+
+    <!-- Left brand panel -->
+    <div class="auth-brand-panel">
+      <div class="brand-mark auth-logo">AF</div>
+      <h2 class="auth-brand-title">Welcome back</h2>
+      <p class="auth-brand-tagline">Upload any document. Ask anything. Get answers instantly — powered by a private, local AI.</p>
+      <ul class="auth-brand-points">
+        <li>Your files never leave your computer</li>
+        <li>Works with PDF (even scans), Word, Excel &amp; more</li>
+        <li>No cloud AI, no subscriptions</li>
+      </ul>
+    </div>
+
+    <!-- Right form panel -->
+    <div class="auth-form-panel">
+      <div class="auth-card">
+        <h1 class="auth-title">Log in</h1>
+        <p class="auth-subtitle">Continue to your documents</p>
+
+        {% if error %}
+          <div class="auth-error" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('login') }}" class="auth-form" id="loginForm" novalidate>
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" value="{{ email or '' }}" required autofocus autocomplete="email">
+
+          <label for="password">Password</label>
+          <div class="password-field">
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+            <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">👁</button>
+          </div>
+          <div class="caps-hint" id="capsHint">⚠ Caps Lock is on</div>
+
+          <div class="remember-row">
+            <label class="remember-label">
+              <input type="checkbox" name="remember" checked>
+              Keep me logged in for 30 days
+            </label>
+          </div>
+
+          <button type="submit" class="auth-btn" id="submitBtn">Log In</button>
+        </form>
+
+        <p class="auth-switch">Don't have an account? <a href="{{ url_for('signup') }}">Sign up</a></p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById("loginForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const pwInput = document.getElementById("password");
+    const toggleBtn = document.getElementById("togglePassword");
+    const capsHint = document.getElementById("capsHint");
+
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = pwInput.type === "password";
+      pwInput.type = isHidden ? "text" : "password";
+      toggleBtn.textContent = isHidden ? "🙈" : "👁";
+      toggleBtn.setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
+    });
+
+    pwInput.addEventListener("keyup", (e) => {
+      if (typeof e.getModifierState === "function") {
+        capsHint.style.display = e.getModifierState("CapsLock") ? "block" : "none";
+      }
+    });
+
+    form.addEventListener("submit", (e) => {
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        form.reportValidity();
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="btn-spinner"></span>Logging in...';
+    });
+  </script>
+
+</body>
+</html>

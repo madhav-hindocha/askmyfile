@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Profile - AskMyFile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
+</head>
+<body>
+
+  <nav class="topbar">
+    <a class="brand" href="{{ url_for('home') }}">
+      <div class="brand-mark">AF</div>
+      <div class="brand-text">
+        <span class="brand-title">AskMyFile</span>
+        <span class="brand-subtitle">Your profile</span>
+      </div>
+    </a>
+    <div class="nav-spacer"></div>
+    <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+    <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+  </nav>
+
+  <main class="profile-main">
+    <a class="back-link" href="{{ url_for('home') }}">← Back to chat</a>
+
+    <div class="profile-card glass-card">
+
+      <div class="profile-head">
+        <div class="profile-avatar-wrap">
+          <img class="profile-avatar" id="avatarPreview" src="{{ url_for('avatar') }}" alt="Profile photo">
+          <button type="button" class="photo-edit-btn" id="photoEditBtn" title="Change photo">📷</button>
+        </div>
+        <div class="profile-id">
+          <h2>{{ user.username }}</h2>
+          <p>{{ user.email }}</p>
+        </div>
+      </div>
+
+      {% if message %}
+        <div class="profile-msg {{ 'ok' if success else 'bad' }}">{{ message }}</div>
+      {% endif %}
+
+      <!-- Photo upload (hidden input, triggered by the camera button) -->
+      <form method="POST" action="{{ url_for('upload_photo') }}" enctype="multipart/form-data" id="photoForm">
+        <input type="file" name="photo" id="photoInput" accept=".png,.jpg,.jpeg,.webp,.gif" hidden>
+      </form>
+
+      <hr class="profile-divider">
+
+      <!-- Username change -->
+      <form method="POST" action="{{ url_for('profile') }}" class="profile-form" id="usernameForm">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" value="{{ user.username }}" required
+               minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+">
+        <span class="field-hint">3-20 characters — letters, numbers, underscores. Shown in the app header and chat.</span>
+        <button type="submit" class="btn-accent" id="saveBtn">Save Changes</button>
+      </form>
+
+      <hr class="profile-divider">
+
+      <p class="profile-note">
+        <b>Photo:</b> PNG, JPG, WEBP, or GIF up to 3 MB. Your photo is stored only on this
+        computer, next to your uploaded files — nothing is sent anywhere.<br><br>
+        <b>Email:</b> your email is your login and can't be changed here.
+      </p>
+
+    </div>
+  </main>
+
+  <script>
+    // Camera button opens the file picker; choosing a file uploads immediately.
+    const photoInput = document.getElementById("photoInput");
+    const photoForm = document.getElementById("photoForm");
+    const photoEditBtn = document.getElementById("photoEditBtn");
+    const avatarPreview = document.getElementById("avatarPreview");
+
+    photoEditBtn.addEventListener("click", () => photoInput.click());
+
+    photoInput.addEventListener("change", () => {
+      if (!photoInput.files.length) return;
+      const file = photoInput.files[0];
+      if (file.size > 3 * 1024 * 1024) {
+        alert("That image is larger than 3 MB. Please choose a smaller one.");
+        photoInput.value = "";
+        return;
+      }
+      // Instant local preview while the form submits
+      avatarPreview.src = URL.createObjectURL(file);
+      photoForm.submit();
+    });
+
+    // Loading state on save
+    const usernameForm = document.getElementById("usernameForm");
+    const saveBtn = document.getElementById("saveBtn");
+    usernameForm.addEventListener("submit", () => {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="btn-spinner"></span>Saving...';
+    });
+  </script>
+
+</body>
+</html>

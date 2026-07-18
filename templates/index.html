@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AskMyFile — Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
+</head>
+<body>
+
+  <div class="app">
+
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('home') }}">
+        <div class="brand-mark">AF</div>
+        <div class="brand-text">
+          <span class="brand-title">AskMyFile</span>
+          <span class="brand-subtitle">Upload any file, then ask questions about it</span>
+        </div>
+      </a>
+
+      <div class="file-control">
+        <input type="file" id="fileInput" hidden>
+        <button id="uploadBtn" class="upload-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 16V4M12 4l-4 4M12 4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Upload File
+        </button>
+        <span id="fileStatus" class="file-pill {{ 'has-file' if filename else '' }}">
+          {{ '📄 ' + filename if filename else 'No file uploaded' }}
+        </span>
+        <button id="clearFileBtn" class="clear-file-btn" style="{{ '' if filename else 'display:none;' }}" title="Remove this file and start over">✕</button>
+      </div>
+
+      <div class="nav-spacer"></div>
+
+      <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+      <a class="user-chip" href="{{ url_for('profile') }}" title="Your profile">
+        <img class="avatar-img" src="{{ url_for('avatar') }}" alt="Your photo">
+        <span class="chip-name">{{ user.username }}</span>
+      </a>
+      <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    </header>
+
+    <!-- Drag-and-drop overlay (only visually active while dragging a file over the window) -->
+    <div id="dropOverlay" class="drop-overlay">
+      <div class="drop-overlay-inner glass-card">
+        <div class="drop-icon">📁</div>
+        <p>Drop your file here</p>
+      </div>
+    </div>
+
+    <main class="chat-area" id="chatWindow">
+      {% if not filename %}
+      <div class="onboarding glass-card" id="onboarding">
+        <h2>Get started in 3 steps</h2>
+        <div class="onboarding-steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text">Upload a file<br><span>PDF (even scans), Word, Excel, CSV, TXT, JSON</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text">Ask a question<br><span>in plain English</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text">Get your answer<br><span>grounded in your file</span></div>
+          </div>
+        </div>
+        <p class="onboarding-hint">Drag &amp; drop a file anywhere on this page, or click "Upload File" above.</p>
+      </div>
+      {% else %}
+      <div class="msg-row ai-row">
+        <div class="avatar ai-avatar">AF</div>
+        <div class="msg-body">
+          <div class="msg-name">Assistant</div>
+          <div class="msg-content">Welcome back, {{ user.username }}! Your file "{{ filename }}" is still loaded. Ask me anything about it.</div>
+        </div>
+      </div>
+      {% endif %}
+    </main>
+
+    <footer class="composer">
+      <div class="composer-inner">
+        <input type="text" id="questionInput" placeholder="Message the assistant about your uploaded file..." autocomplete="off">
+        <button id="askBtn" class="send-btn" aria-label="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19V5M12 5l-6 6M12 5l6 6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="composer-hint">AskMyFile can make mistakes — please verify important information against your original document.</div>
+    </footer>
+
+  </div>
+
+  <!-- Toast container for errors (kept separate from the chat itself) -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script>
+    const AVATAR_URL = "{{ url_for('avatar') }}";
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const fileStatus = document.getElementById("fileStatus");
+    const clearFileBtn = document.getElementById("clearFileBtn");
+    const chatWindow = document.getElementById("chatWindow");
+    const questionInput = document.getElementById("questionInput");
+    const askBtn = document.getElementById("askBtn");
+    const dropOverlay = document.getElementById("dropOverlay");
+    const toastContainer = document.getElementById("toastContainer");
+
+    uploadBtn.addEventListener("click", () => fileInput.click());
+
+    // ---------- Toasts (errors shown separately from chat) ----------
+    function showToast(message, type = "error") {
+      const toast = document.createElement("div");
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.classList.add("toast-visible"), 10);
+      setTimeout(() => {
+        toast.classList.remove("toast-visible");
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+
+    // ---------- Chat message rendering ----------
+    function removeOnboarding() {
+      const onboarding = document.getElementById("onboarding");
+      if (onboarding) onboarding.remove();
+    }
+
+    function addMessage(text, sender) {
+      removeOnboarding();
+      const row = document.createElement("div");
+      row.className = "msg-row " + (sender === "user" ? "user-row" : "ai-row");
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar " + (sender === "user" ? "user-avatar" : "ai-avatar");
+      if (sender === "user") {
+        const img = document.createElement("img");
+        img.src = AVATAR_URL;
+        img.alt = "You";
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = "AF";
+      }
+
+      const body = document.createElement("div");
+      body.className = "msg-body";
+
+      const name = document.createElement("div");
+      name.className = "msg-name";
+      name.textContent = sender === "user" ? "You" : "Assistant";
+
+      const content = document.createElement("div");
+      content.className = "msg-content";
+      content.textContent = text;
+
+      body.appendChild(name);
+      body.appendChild(content);
+      row.appendChild(avatar);
+      row.appendChild(body);
+      chatWindow.appendChild(row);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      return content;
+    }
+
+    // Rotating "thinking" messages so a longer wait doesn't feel broken
+    const thinkingMessages = [
+      "Reading your document...",
+      "Searching for relevant parts...",
+      "Thinking it through...",
+      "Almost there..."
+    ];
+
+    function addTypingIndicator() {
+      const contentEl = addMessage("", "ai");
+      contentEl.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span> <span class="typing-label"></span>';
+      const label = contentEl.querySelector(".typing-label");
+
+      let i = 0;
+      label.textContent = thinkingMessages[0];
+      const interval = setInterval(() => {
+        i = (i + 1) % thinkingMessages.length;
+        if (label) label.textContent = thinkingMessages[i];
+      }, 2200);
+
+      contentEl.dataset.intervalId = interval;
+      return contentEl;
+    }
+
+    function stopTypingIndicator(contentEl) {
+      const intervalId = contentEl.dataset.intervalId;
+      if (intervalId) clearInterval(Number(intervalId));
+    }
+
+    // ---------- Upload handling (shared by click-upload and drag & drop) ----------
+    async function uploadFile(file) {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      fileStatus.textContent = "Processing...";
+      fileStatus.classList.add("processing");
+
+      try {
+        const res = await fetch("/upload", { method: "POST", body: formData });
+
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+
+        const data = await res.json();
+
+        if (data.success) {
+          fileStatus.textContent = "📄 " + data.filename;
+          fileStatus.classList.remove("processing");
+          fileStatus.classList.add("has-file");
+          clearFileBtn.style.display = "inline-flex";
+          addMessage("File '" + data.filename + "' uploaded and indexed. You can ask questions now.", "ai");
+        } else {
+          fileStatus.textContent = "No file uploaded";
+          fileStatus.classList.remove("processing");
+          showToast(data.message || "Upload failed.");
+        }
+      } catch (err) {
+        fileStatus.textContent = "No file uploaded";
+        fileStatus.classList.remove("processing");
+        showToast("Could not reach the server.");
+      }
+    }
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) uploadFile(fileInput.files[0]);
+    });
+
+    // ---------- Drag & drop anywhere on the page ----------
+    let dragCounter = 0;
+
+    window.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      dragCounter++;
+      dropOverlay.classList.add("drop-overlay-active");
+    });
+
+    window.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        dropOverlay.classList.remove("drop-overlay-active");
+      }
+    });
+
+    window.addEventListener("dragover", (e) => e.preventDefault());
+
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropOverlay.classList.remove("drop-overlay-active");
+      if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+    });
+
+    // ---------- Clear / replace file ----------
+    clearFileBtn.addEventListener("click", async () => {
+      try {
+        await fetch("/clear-file", { method: "POST" });
+        fileStatus.textContent = "No file uploaded";
+        fileStatus.classList.remove("has-file");
+        clearFileBtn.style.display = "none";
+        addMessage("File cleared. Upload a new file to keep chatting.", "ai");
+      } catch (err) {
+        showToast("Could not clear the file.");
+      }
+    });
+
+    // ---------- Asking questions ----------
+    async function sendQuestion() {
+      const question = questionInput.value.trim();
+      if (!question) return;
+
+      addMessage(question, "user");
+      questionInput.value = "";
+
+      const thinkingEl = addTypingIndicator();
+
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: question })
+        });
+
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+
+        const contentType = res.headers.get("content-type") || "";
+
+        // JSON responses: either an error, or a whole answer at once
+        // (also keeps things working if the server is running older code)
+        if (contentType.includes("application/json")) {
+          const data = await res.json();
+          stopTypingIndicator(thinkingEl);
+          if (data.success && data.answer) {
+            thinkingEl.innerHTML = "";
+            thinkingEl.textContent = data.answer;
+          } else {
+            const row = thinkingEl.closest(".msg-row");
+            if (row) row.remove(); else thinkingEl.remove();
+            showToast(data.message || "Something went wrong.");
+          }
+          return;
+        }
+
+        // Streamed answer: render text the moment each piece arrives
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let firstPiece = true;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (firstPiece) {
+            stopTypingIndicator(thinkingEl);
+            thinkingEl.innerHTML = "";
+            thinkingEl.textContent = "";
+            firstPiece = false;
+          }
+          thinkingEl.textContent += decoder.decode(value, { stream: true });
+          chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+        if (firstPiece) {
+          // Stream ended with no content at all
+          stopTypingIndicator(thinkingEl);
+          const row = thinkingEl.closest(".msg-row");
+          if (row) row.remove(); else thinkingEl.remove();
+          showToast("The model returned an empty answer. Please try again.");
+        }
+      } catch (err) {
+        stopTypingIndicator(thinkingEl);
+        const row = thinkingEl.closest(".msg-row");
+        if (row) row.remove(); else thinkingEl.remove();
+        showToast("Could not reach the server.");
+      }
+    }
+
+    askBtn.addEventListener("click", sendQuestion);
+    questionInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendQuestion();
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Don't copy local-only / regenerable files into the image
+venv/
+__pycache__/
+*.pyc
+uploads/*
+!uploads/.gitkeep
+logs/*
+!logs/.gitkeep
+users.db
+.secret_key
+.git
+.gitignore
+run.bat

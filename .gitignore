@@ -1,0 +1,22 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# User data -- never push accounts, uploaded files, or session keys
+users.db
+uploads/*
+!uploads/.gitkeep
+.secret_key
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Local environment configuration files
+.env
+.env.*

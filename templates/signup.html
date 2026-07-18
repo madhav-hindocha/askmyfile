@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Up - AskMyFile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
+</head>
+<body class="auth-body">
+
+  <div class="auth-top">
+    <a class="brand" href="{{ url_for('landing') }}">
+      <div class="brand-mark">AF</div>
+      <div class="brand-text"><span class="brand-title">AskMyFile</span></div>
+    </a>
+    <button class="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+  </div>
+
+  <div class="auth-shell">
+
+    <div class="auth-brand-panel">
+      <div class="brand-mark auth-logo">AF</div>
+      <h2 class="auth-brand-title">Join AskMyFile</h2>
+      <p class="auth-brand-tagline">Upload any document. Ask anything. Get answers instantly — powered by a private, local AI.</p>
+      <ul class="auth-brand-points">
+        <li>Your files never leave your computer</li>
+        <li>Works with PDF (even scans), Word, Excel &amp; more</li>
+        <li>No cloud AI, no subscriptions</li>
+      </ul>
+    </div>
+
+    <div class="auth-form-panel">
+      <div class="auth-card">
+        <h1 class="auth-title">Create your account</h1>
+        <p class="auth-subtitle">Start chatting with your documents in seconds</p>
+
+        {% if error %}
+          <div class="auth-error" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('signup') }}" class="auth-form" id="signupForm" novalidate>
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" value="{{ username or '' }}" required autofocus
+                 minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" autocomplete="username">
+          <span class="field-hint" id="usernameHint">3-20 characters — letters, numbers, underscores</span>
+
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" value="{{ email or '' }}" required autocomplete="email">
+          <span class="field-hint" id="emailHint">We'll never share your email</span>
+
+          <label for="password">Password</label>
+          <div class="password-field">
+            <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password">
+            <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">👁</button>
+          </div>
+          <div class="strength-wrap" id="strengthWrap">
+            <div class="strength-bar"><div class="strength-fill"></div></div>
+            <div class="strength-text" id="strengthText">At least 8 characters, with a letter and a number</div>
+          </div>
+
+          <label for="confirmPassword">Confirm password</label>
+          <div class="password-field">
+            <input type="password" id="confirmPassword" name="confirm_password" required autocomplete="new-password">
+          </div>
+          <div class="match-hint" id="matchHint"></div>
+
+          <button type="submit" class="auth-btn" id="submitBtn">Create Account</button>
+        </form>
+
+        <p class="auth-switch">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById("signupForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const pwInput = document.getElementById("password");
+    const confirmInput = document.getElementById("confirmPassword");
+    const toggleBtn = document.getElementById("togglePassword");
+    const strengthWrap = document.getElementById("strengthWrap");
+    const strengthText = document.getElementById("strengthText");
+    const matchHint = document.getElementById("matchHint");
+
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = pwInput.type === "password";
+      pwInput.type = isHidden ? "text" : "password";
+      confirmInput.type = pwInput.type;
+      toggleBtn.textContent = isHidden ? "🙈" : "👁";
+    });
+
+    // ---------- Password strength meter ----------
+    function scorePassword(pw) {
+      let score = 0;
+      if (pw.length >= 8) score++;
+      if (pw.length >= 12) score++;
+      if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+      if (/\d/.test(pw)) score++;
+      if (/[^A-Za-z0-9]/.test(pw)) score++;
+      return score;
+    }
+
+    pwInput.addEventListener("input", () => {
+      const pw = pwInput.value;
+      strengthWrap.className = "strength-wrap";
+      if (!pw) {
+        strengthText.textContent = "At least 8 characters, with a letter and a number";
+        return;
+      }
+      const s = scorePassword(pw);
+      if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) {
+        strengthWrap.classList.add("s-weak");
+        strengthText.textContent = "Too weak — needs 8+ characters with a letter and a number";
+      } else if (s <= 2) {
+        strengthWrap.classList.add("s-fair");
+        strengthText.textContent = "Fair — add capitals or symbols to strengthen";
+      } else if (s <= 3) {
+        strengthWrap.classList.add("s-good");
+        strengthText.textContent = "Good password";
+      } else {
+        strengthWrap.classList.add("s-strong");
+        strengthText.textContent = "Strong password";
+      }
+      checkMatch();
+    });
+
+    // ---------- Confirm-password live match ----------
+    function checkMatch() {
+      if (!confirmInput.value) { matchHint.textContent = ""; return; }
+      if (confirmInput.value === pwInput.value) {
+        matchHint.textContent = "✓ Passwords match";
+        matchHint.className = "match-hint match-ok";
+      } else {
+        matchHint.textContent = "✗ Passwords don't match";
+        matchHint.className = "match-hint match-bad";
+      }
+    }
+    confirmInput.addEventListener("input", checkMatch);
+
+    // ---------- Live username availability check ----------
+    const usernameInput = document.getElementById("username");
+    const usernameHint = document.getElementById("usernameHint");
+    let usernameTimer;
+
+    usernameInput.addEventListener("input", () => {
+      clearTimeout(usernameTimer);
+      const value = usernameInput.value.trim();
+
+      if (value.length < 3) {
+        usernameHint.textContent = "3-20 characters — letters, numbers, underscores";
+        usernameHint.className = "field-hint";
+        return;
+      }
+      if (!/^[A-Za-z0-9_]+$/.test(value)) {
+        usernameHint.textContent = "✗ Only letters, numbers, and underscores allowed";
+        usernameHint.className = "field-hint hint-bad";
+        return;
+      }
+
+      usernameTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/check-username?username=${encodeURIComponent(value)}`);
+          const data = await res.json();
+          if (data.status === "available") {
+            usernameHint.textContent = "✓ Username is available";
+            usernameHint.className = "field-hint hint-ok";
+          } else if (data.status === "taken") {
+            usernameHint.textContent = "✗ That username is taken";
+            usernameHint.className = "field-hint hint-bad";
+          }
+        } catch (err) { /* non-critical */ }
+      }, 350);
+    });
+
+    // ---------- Live email availability check ----------
+    const emailInput = document.getElementById("email");
+    const emailHint = document.getElementById("emailHint");
+    let emailTimer;
+
+    emailInput.addEventListener("input", () => {
+      clearTimeout(emailTimer);
+      const value = emailInput.value.trim();
+
+      if (!value.includes("@") || !value.includes(".")) {
+        emailHint.textContent = "We'll never share your email";
+        emailHint.className = "field-hint";
+        return;
+      }
+
+      emailTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/check-email?email=${encodeURIComponent(value)}`);
+          const data = await res.json();
+          if (data.status === "available") {
+            emailHint.textContent = "✓ Looks good";
+            emailHint.className = "field-hint hint-ok";
+          } else if (data.status === "taken") {
+            emailHint.textContent = "✗ An account already exists for this email";
+            emailHint.className = "field-hint hint-bad";
+          }
+        } catch (err) { /* non-critical */ }
+      }, 350);
+    });
+
+    // ---------- Submit validation + loading state ----------
+    form.addEventListener("submit", (e) => {
+      if (!form.checkValidity()) {
+        e.preventDefault();
+        form.reportValidity();
+        return;
+      }
+      if (pwInput.value !== confirmInput.value) {
+        e.preventDefault();
+        checkMatch();
+        confirmInput.focus();
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="btn-spinner"></span>Creating account...';
+    });
+  </script>
+
+</body>
+</html>
