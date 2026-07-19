@@ -16,10 +16,8 @@ if exist ".env" (
     )
 )
 
-if "%USE_CLOUD%"=="1" (
-    echo Using Cloud AI (OpenRouter/Groq). Skipping Ollama check.
-    goto :skip_ollama_install
-)
+if "%USE_CLOUD%"=="1" echo Using Cloud AI (OpenRouter/Groq). Skipping Ollama check.
+if "%USE_CLOUD%"=="1" goto :skip_ollama_install
 echo.
 
 REM --- Check Python is installed (auto-installs via winget if missing) ---
