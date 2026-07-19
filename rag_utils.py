@@ -284,13 +284,18 @@ def sounds_like_no_answer_found(answer):
 #               used when no GROQ_API_KEY is present).
 # Whichever is active is chosen automatically at startup based on the
 # environment, so the same code runs locally AND when deployed to the web.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-# openai/gpt-oss-20b: a current Groq production model -- very fast (~1000
-# tokens/sec), cheap, 131K context. Override via GROQ_MODEL in .env.
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 
-USE_GROQ = bool(GROQ_API_KEY)
+CLOUD_API_KEY = OPENROUTER_API_KEY or GROQ_API_KEY
+USE_CLOUD = bool(CLOUD_API_KEY)
+
+if OPENROUTER_API_KEY:
+    CLOUD_URL = "https://openrouter.ai/api/v1/chat/completions"
+    CLOUD_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash")
+else:
+    CLOUD_URL = "https://api.groq.com/openai/v1/chat/completions"
+    CLOUD_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 
 # ---------------------------------------------------------------------------
 # Ollama settings (local backend)
@@ -1033,23 +1038,30 @@ def ask_ollama(question, context_chunks=None):
 
 
 # ---------------------------------------------------------------------------
-# STEP 5 (cloud): CALL GROQ LLM  -- used when GROQ_API_KEY is set
+# STEP 5 (cloud): CALL CLOUD LLM  -- used when CLOUD_API_KEY is set
 # ---------------------------------------------------------------------------
-def ask_groq(question, context_chunks=None):
+def ask_cloud(question, context_chunks=None):
     """
-    Sends a question to Groq's cloud API and returns the complete answer
-    in one go (non-streaming). Uses the OpenAI-compatible chat endpoint.
+    Sends a question to the configured cloud API (OpenRouter or Groq) and
+    returns the complete answer in one go (non-streaming).
     """
     prompt = _build_prompt(question, context_chunks)
+    
+    headers = {
+        "Authorization": f"Bearer {CLOUD_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    # Add OpenRouter headers if it is an OpenRouter key
+    if OPENROUTER_API_KEY:
+        headers["HTTP-Referer"] = "http://localhost:5000"
+        headers["X-Title"] = "AskMyFile"
+
     try:
         response = _session.post(
-            GROQ_URL,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            CLOUD_URL,
+            headers=headers,
             json={
-                "model": GROQ_MODEL,
+                "model": CLOUD_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "max_tokens": 800,
@@ -1059,32 +1071,38 @@ def ask_groq(question, context_chunks=None):
         )
     except requests.exceptions.ConnectionError:
         raise RuntimeError(
-            "Could not reach Groq. Check the server's internet connection "
-            "and that GROQ_API_KEY is set correctly."
+            "Could not reach the cloud AI. Check your internet connection "
+            "and that your API_KEY is set correctly."
         )
 
     if response.status_code != 200:
-        raise RuntimeError(f"Groq error ({response.status_code}): {response.text}")
+        raise RuntimeError(f"Cloud AI error ({response.status_code}): {response.text}")
 
     data = response.json()
     return data["choices"][0]["message"]["content"].strip()
 
 
-def ask_groq_stream(question, context_chunks=None):
+def ask_cloud_stream(question, context_chunks=None):
     """
-    Same as ask_groq, but yields the answer piece by piece as Groq
+    Same as ask_cloud, but yields the answer piece by piece as the cloud AI
     generates it (Server-Sent Events), so the UI shows text immediately.
     """
     prompt = _build_prompt(question, context_chunks)
+    
+    headers = {
+        "Authorization": f"Bearer {CLOUD_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    if OPENROUTER_API_KEY:
+        headers["HTTP-Referer"] = "http://localhost:5000"
+        headers["X-Title"] = "AskMyFile"
+
     try:
         with _session.post(
-            GROQ_URL,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            CLOUD_URL,
+            headers=headers,
             json={
-                "model": GROQ_MODEL,
+                "model": CLOUD_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "max_tokens": 800,
@@ -1095,7 +1113,7 @@ def ask_groq_stream(question, context_chunks=None):
         ) as response:
             if response.status_code != 200:
                 raise RuntimeError(
-                    f"Groq error ({response.status_code}): {response.text}"
+                    f"Cloud AI error ({response.status_code}): {response.text}"
                 )
             for line in response.iter_lines():
                 if not line:
@@ -1115,8 +1133,8 @@ def ask_groq_stream(question, context_chunks=None):
                     continue
     except requests.exceptions.ConnectionError:
         raise RuntimeError(
-            "Could not reach Groq. Check the server's internet connection "
-            "and that GROQ_API_KEY is set correctly."
+            "Could not reach the cloud AI. Check your internet connection "
+            "and that your API_KEY is set correctly."
         )
 
 
@@ -1163,18 +1181,18 @@ def ask_ollama_stream(question, context_chunks=None):
 
 
 # ---------------------------------------------------------------------------
-# BACKEND DISPATCHERS -- app.py calls these; they route to Groq or Ollama.
+# BACKEND DISPATCHERS -- app.py calls these; they route to Cloud or Ollama.
 # ---------------------------------------------------------------------------
 def ask_llm(question, context_chunks=None):
-    """Answer using whichever backend is active (Groq if configured, else Ollama)."""
-    if USE_GROQ:
-        return ask_groq(question, context_chunks)
+    """Answer using whichever backend is active (Cloud if configured, else Ollama)."""
+    if USE_CLOUD:
+        return ask_cloud(question, context_chunks)
     return ask_ollama(question, context_chunks)
 
 
 def ask_llm_stream(question, context_chunks=None):
     """Streaming answer via whichever backend is active."""
-    if USE_GROQ:
-        yield from ask_groq_stream(question, context_chunks)
+    if USE_CLOUD:
+        yield from ask_cloud_stream(question, context_chunks)
     else:
         yield from ask_ollama_stream(question, context_chunks)
