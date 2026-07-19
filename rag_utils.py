@@ -313,9 +313,9 @@ def warm_up_model():
     loaded into memory before any real user question arrives. Runs in a
     background thread so it never blocks the server from starting.
     """
-    # Groq is a cloud API with no cold-start on our side -- nothing to warm.
-    if USE_GROQ:
-        print(f"Using Groq cloud model '{GROQ_MODEL}' -- no local warm-up needed.")
+    # Cloud AI has no cold-start on our side -- nothing to warm.
+    if USE_CLOUD:
+        print(f"Using cloud model '{CLOUD_MODEL}' -- no local warm-up needed.")
         return
 
     def _warm():
