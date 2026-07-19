@@ -7,6 +7,21 @@ echo   AskMyFile - starting up, please wait...
 echo ============================================
 echo.
 
+REM --- Check if using Cloud AI (OpenRouter or Groq) ---
+set USE_CLOUD=0
+if exist ".env" (
+    for /f "usebackq eol=# tokens=1,2 delims==" %%a in (".env") do (
+        if /i "%%a"=="OPENROUTER_API_KEY" if not "%%b"=="" set USE_CLOUD=1
+        if /i "%%a"=="GROQ_API_KEY" if not "%%b"=="" set USE_CLOUD=1
+    )
+)
+
+if "%USE_CLOUD%"=="1" (
+    echo Using Cloud AI (OpenRouter/Groq). Skipping Ollama check.
+    goto :skip_ollama_install
+)
+echo.
+
 REM --- Check Python is installed (auto-installs via winget if missing) ---
 where python >nul 2>nul
 if errorlevel 1 (
@@ -56,6 +71,7 @@ if errorlevel 1 (
     exit /b 0
 )
 
+:skip_ollama_install
 REM --- Check Tesseract OCR (used for scanned PDFs and images) ---
 if exist "C:\Program Files\Tesseract-OCR\tesseract.exe" goto :tesseract_ok
 where tesseract >nul 2>nul
@@ -95,6 +111,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
+if "%USE_CLOUD%"=="1" goto :skip_ollama_pull
 REM --- Make sure the AI model is available locally ---
 REM Reads OLLAMA_MODEL from .env if present, otherwise uses the default.
 set OLLAMA_MODEL=llama3.2:1b
@@ -105,6 +122,7 @@ if exist ".env" (
 )
 echo Checking AI model %OLLAMA_MODEL% (downloads once, may take a while the first time)...
 ollama pull %OLLAMA_MODEL%
+:skip_ollama_pull
 
 REM --- Offer to create a Desktop shortcut, first run only ---
 if "%FIRST_RUN%"=="1" (
@@ -117,8 +135,10 @@ if "%FIRST_RUN%"=="1" (
     if /i "%CREATE_SHORTCUT%"=="y" call create_desktop_shortcut.bat
 )
 
+if "%USE_CLOUD%"=="1" goto :skip_ollama_serve
 REM --- Start Ollama in the background if it isn't already running ---
 start "" /min ollama serve
+:skip_ollama_serve
 
 REM --- Open the browser after a short delay so the server has time to start ---
 start "" cmd /c "timeout /t 4 >nul && start http://127.0.0.1:5000"
